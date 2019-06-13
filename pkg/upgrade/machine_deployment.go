@@ -6,17 +6,53 @@ package upgrade
 import (
 	"encoding/json"
 	"fmt"
-
+	"github.com/blang/semver"
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	clusterapiv1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 type MachineDeploymentUpgrader struct {
 	*base
+}
+
+// This is why i hate client-go
+// this implements MachineDeploymentsGetter, pass this into NewMachineDeploymentUpgrader2
+type mdwrapper struct {
+	c CAPIClient
+}
+func (m *mdwrapper) MachineDeployments(ns string) MachineDeploymentsClient {
+	return m.c.MachineDeployments(ns)
+}
+
+func NewMachineDeploymentUpgrader2(log logr.Logger, mdn MachineDeploymentsNamespaced, config Config, cfg *rest.Config) (*MachineDeploymentUpgrader, error) {
+	var userVersion, desiredVersion semver.Version
+
+	if config.KubernetesVersion != "" {
+		v, err := semver.ParseTolerant(config.KubernetesVersion)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error parsing kubernetes version %q", config.KubernetesVersion)
+		}
+		userVersion = v
+		desiredVersion = v
+	}
+
+	return &MachineDeploymentUpgrader{
+		&base{
+			log: log,
+			MachineDeploymentsNamespacer: mdn,
+			clusterNamespace: config.TargetCluster.Namespace,
+			clusterName: config.TargetCluster.Name,
+			userVersion: userVersion,
+			desiredVersion: desiredVersion,
+			// use this to generate a k8s interace on the fly i think
+			cfg: cfg,
+		},
+	}, nil
 }
 
 func NewMachineDeploymentUpgrader(log logr.Logger, config Config) (*MachineDeploymentUpgrader, error) {
@@ -50,7 +86,7 @@ func (u *MachineDeploymentUpgrader) listMachineDeployments() (*clusterapiv1alpha
 		LabelSelector: fmt.Sprintf("cluster.k8s.io/cluster-name=%s,set=node", u.clusterName),
 	}
 
-	machineDeployments, err := u.managementClusterAPIClient.MachineDeployments(u.clusterNamespace).List(listOptions)
+	machineDeployments, err := u.MachineDeploymentsNamespacer.MachineDeployments(u.clusterNamespace).List(listOptions)
 	if err != nil {
 		return nil, errors.Wrap(err, "error listing machines")
 	}
@@ -92,7 +128,7 @@ func (u *MachineDeploymentUpgrader) updateMachineDeployment(machineDeployment *c
 		return errors.Wrap(err, "error creating json patch")
 	}
 
-	_, err = u.managementClusterAPIClient.MachineDeployments(u.clusterNamespace).Patch(machineDeployment.Name, types.MergePatchType, patchBytes)
+	_, err = u.MachineDeploymentsNamespacer.MachineDeployments(u.clusterNamespace).Patch(machineDeployment.Name, types.MergePatchType, patchBytes)
 	if err != nil {
 		return errors.Wrapf(err, "error patching machinedeployment %s", machineDeployment.Name)
 	}

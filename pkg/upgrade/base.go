@@ -5,6 +5,9 @@ package upgrade
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 
 	"github.com/blang/semver"
 	"github.com/go-logr/logr"
@@ -13,9 +16,16 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	clusterapiv1alpha1client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
+
+type MachineDeploymentsNamespaced interface {
+	MachineDeployments(string) MachineDeploymentsClient
+}
+type MachineDeploymentsClient interface {
+	List(metav1.ListOptions) (*v1alpha1.MachineDeploymentList, error)
+	Patch(string, types.PatchType, []byte, ...string) (*v1alpha1.MachineDeployment, error)
+}
 
 type base struct {
 	log                        logr.Logger
@@ -23,9 +33,8 @@ type base struct {
 	desiredVersion             semver.Version
 	clusterNamespace           string
 	clusterName                string
-	managementClusterAPIClient clusterapiv1alpha1client.ClusterV1alpha1Interface
-	targetRestConfig           *rest.Config
-	targetKubernetesClient     kubernetes.Interface
+	MachineDeploymentsNamespacer MachineDeploymentsNamespaced
+	cfg *rest.Config
 	providerIDsToNodes         map[string]*v1.Node
 }
 
