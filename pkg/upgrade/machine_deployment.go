@@ -61,7 +61,7 @@ func (u *MachineDeploymentUpgrader) listMachineDeployments() (*clusterapiv1alpha
 func (u *MachineDeploymentUpgrader) upgradeMachineDeployments(list *clusterapiv1alpha1.MachineDeploymentList) error {
 	for _, machineDeployment := range list.Items {
 		if err := u.updateMachineDeployment(&machineDeployment); err != nil {
-			u.log.Error(err, "Failed to create new MachineDeployment", "namespace", machineDeployment.Namespace, "name", machineDeployment.Name)
+			u.log.Error(err, "Failed to create new MachineDeploymentScope", "namespace", machineDeployment.Namespace, "name", machineDeployment.Name)
 			return err
 		}
 	}
@@ -69,7 +69,7 @@ func (u *MachineDeploymentUpgrader) upgradeMachineDeployments(list *clusterapiv1
 }
 
 func (u *MachineDeploymentUpgrader) updateMachineDeployment(machineDeployment *clusterapiv1alpha1.MachineDeployment) error {
-	u.log.Info("Updating MachineDeployment", "namespace", machineDeployment.Namespace, "name", machineDeployment.Name)
+	u.log.Info("Updating MachineDeploymentScope", "namespace", machineDeployment.Namespace, "name", machineDeployment.Name)
 
 	// Get the original, pre-modified version in json
 	original, err := json.Marshal(machineDeployment)
